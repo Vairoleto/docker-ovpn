@@ -40,10 +40,10 @@ remote-cert-tls server
 connect-timeout 5
 connect-timeout 30
 
-remote ovpn01.procomisp.com.ar $OVPN_PORT $OVPN_PROTO
 remote $domain $OVPN_PORT $OVPN_PROTO
-remote procomisp.com.ar $OVPN_PORT $OVPN_PROTO
-remote ovpn04.procomisp.com.ar $OVPN_PORT $OVPN_PROTO"
+remote $domain $OVPN_PORT $OVPN_PROTO
+remote $domain $OVPN_PORT $OVPN_PROTO
+remote $domain $OVPN_PORT $OVPN_PROTO"
     if [ "$OVPN_PROTO" == "udp6" ]; then
         echo "remote $OVPN_CN $OVPN_PORT udp"
     fi
