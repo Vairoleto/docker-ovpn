@@ -116,6 +116,15 @@ docker run -d \
 --restart unless-stopped \
 kylemanna/openvpn
 
+# We need to reload iptables rules after every restart and every new network added.
+docker exec -d $empresa.openvpn /bin/bash -c "sed -i '3ifi' /usr/local/bin/ovpn_run ; sed -i '3iiptables-restore /etc/openvpn/iptables.rules.v4' /usr/local/bin/ovpn_run ; sed -i '3iif [  -f /etc/openvpn/iptables.rules.v4 ]; then' /usr/local/bin/ovpn_run ; sed -i '3i# Load iptables rules' /usr/local/bin/ovpn_run" 
+
+# Add iptables rules to this container, we accept only servers specified, everything else is dropped
+docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -A FORWARD -j DROP"
+
+# save those iptables changes
+docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4"
+
 docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port');"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
@@ -141,7 +150,6 @@ docker run \
 echo ""
 echo ""
 echo -e "\e[33mGenerando llaves para servidor OpenVpn\e[0m"
-#echo -e "\e[32mPor favor ingrese la password unica para el server\e[0m"
 docker run -v $empresa.openvpn:/etc/openvpn \
 --rm -it kylemanna/openvpn ovpn_initpki nopass
 
@@ -158,6 +166,15 @@ docker run -d \
 -p $port:1194/tcp --cap-add=NET_ADMIN \
 --restart unless-stopped \
 kylemanna/openvpn
+
+# We need to reload iptables rules after every restart and every new network added.
+docker exec -d $empresa.openvpn /bin/bash -c "sed -i '3ifi' /usr/local/bin/ovpn_run ; sed -i '3iiptables-restore /etc/openvpn/iptables.rules.v4' /usr/local/bin/ovpn_run ; sed -i '3iif [  -f /etc/openvpn/iptables.rules.v4 ]; then' /usr/local/bin/ovpn_run ; sed -i '3i# Load iptables rules' /usr/local/bin/ovpn_run" 
+
+# Add iptables rules to this container, we accept only servers specified, everything else is dropped
+docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -A FORWARD -j DROP"
+
+# save those iptables changes
+docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4"
 
 docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port');"
 
@@ -232,13 +249,16 @@ if [ -z "$empresa" ];
                 read ippriv
                 echo -e "\e[34mIngrese la mascara para la subred definida (ej: 255.255.255.0): \e[0m"
                 read mask
-                docker exec $empresa.openvpn bash -c "echo push \'route $ippriv $mask\' >> /etc/openvpn/openvpn.conf"
+                docker exec $empresa.openvpn bash -c "echo push \'route $ippriv $mask\' >> /etc/openvpn/openvpn.conf";
+                docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -I FORWARD 1 -d $ippriv/$mask -j ACCEPT"
                 echo -e "\e[34mQuiere agregar otro servidor a $empresa? (y/n): \e[0m"
 fi
 read answer
 if echo "$answer" | grep -iq "^y" ;then
     agrega_server
 else
+   echo "Guardando cambios en iptables..." ; 
+   docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4" ;     
    echo -e "\e[31mSus cambios no surtiran efecto hasta que el contenedor de $empresa sea reinciado. Desea reiniciarlo ahora? CUIDADO! esto desconectara a los usuarios de $empresa momentaneamente (y/n)\e[0m"
    read answer
                 if echo "$answer" | grep -iq "^y" ;then
