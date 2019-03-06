@@ -328,6 +328,12 @@ fi
 
 migrar_empresa()
 {
+
+if [ "$EUID" -ne 0 ]
+  then echo -e "\e[31mParece que no tenes los permisos necesarios, tal vez un "sudo" ayude?\e[0m"
+  main_menu
+fi
+
 echo -e "\e[31m CUIDADO!!!! \e[0m"
 echo -e "\e[31m CUIDADO!!!! \e[0m"
 echo -e "\e[31m CUIDADO!!!! \e[0m"
@@ -355,12 +361,23 @@ read empresa
 port=$(ssh root@192.168.121.27 'cat /openvpn-dc/empresas.txt | grep '$empresa'' | awk '{print $2}')
 echo "Ok, veo que el puerto de $empresa es $port"
 echo "Ahora voy a crear el contenedor $empresa en MSOFFICE con el puerto $port"
-echo "Es esto correcto?"
-case $yn in
-        [Yy]* ) migrar_ya
-        [Nn]* ) echo -e "\e[31mTarea cancelada\e[0m" && exit;;
-        * ) echo -e "\e[31mPor favor responda y o n .\e[0m";;
-    esac
+
+if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE nombre='$empresa' COLLATE NOCASE);" | grep -q '1';
+        then
+                echo -e "\e[31mla empresa $empresa ya se encuentra dada de alta.\e[0m"
+        else
+                if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE puerto='$port' COLLATE NOCASE);" | grep -q '1';
+                        then
+                                echo -e "\e[31mel puerto $port ya se encuentra utilizado por otra empresa.\e[0m"
+                        else
+                                read -p $'\e[34mEs esto correcto? (y/n): \e[0m' yn
+                                        case $yn in
+                                                [Yy]* ) migrar_ya;;
+                                                [Nn]* ) echo -e "\e[31mTarea cancelada\e[0m" && main_menu;;
+                                                    * ) echo -e "\e[31mPor favor responda y o n .\e[0m";;
+                                        esac
+                fi
+fi
 }
 
 migrar_ya()
@@ -372,7 +389,19 @@ docker run -d \
 -p $port:1194/tcp --cap-add=NET_ADMIN \
 --restart unless-stopped \
 kylemanna/openvpn
+
+echo -e "\e[33mCopiando archivos de contenedor en IPLAN\e[0m"
+sudo scp -r root@192.168.121.27:/var/lib/docker/volumes/$empresa.openvpn/_data /var/lib/docker/volumes/$empresa.openvpn
+
+echo -e "\e[33mRetocando config de contenedor en IPLAN\e[0m"
+sed -i 's/\<push\>/& "/' /var/lib/docker/volumes/$empresa.openvpn/_data/openvpn.conf
+sed -i 's/push.*/&"/g' /var/lib/docker/volumes/$empresa.openvpn/_data/openvpn.conf
+
+echo -e "\e[33mIniciando en el nuevo contenedor\e[0m"
+docker restart $empresa.openvpn
+
 echo -e "\e[33mConfigurando IPTABLES en el nuevo contenedor\e[0m"
+
 # We need to reload iptables rules after every restart and every new network added.
 docker exec -d $empresa.openvpn /bin/bash -c "sed -i '3ifi' /usr/local/bin/ovpn_run ; sed -i '3iiptables-restore /etc/openvpn/iptables.rules.v4' /usr/local/bin/ovpn_run ; sed -i '3iif [  -f /etc/openvpn/iptables.rules.v4 ]; then' /usr/local/bin/ovpn_run ; sed -i '3i# Load iptables rules' /usr/local/bin/ovpn_run" 
 
@@ -390,23 +419,19 @@ echo -e "\e[33mCreando folder de empresa y sincronizando con server cifs\e[0m"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
 
-echo -e "\e[33mAhora voy a detener el contenedor $empresa\e[0m"
-
-ssh root@192.168.121.27 'docker stop $empresa.openvpn'
-
-echo -e "\e[33mCopiando archivos de contenedor en IPLAN\e[0m"
-
-sudo scp -r root@192.168.121.27:/var/lib/docker/volumes/$empresa.openvpn/_data /var/lib/docker/volumes/$empresa.openvpn/_data
-
 echo -e "\e[33mTengo que bloquear el acceso a ovpn01.procomisp.com.ar y ovpn02.procomisp.com.ar en el mikrotik de IPLAN\e[0m"
 
-#bloquear nat de $port
+ssh -o ConnectTimeout=30 -l ovpnmigrate -i /root/.ssh/id_rsa 192.168.121.3 "/ip firewall filter add protocol=tcp dst-port="\""$port"\"" chain=input action=drop comment="\""["$empresa"] [MIGRADO] procom docker openvpn"\"" place-before=0"
+
+echo -e "\e[33mAhora voy a detener el contenedor $empresa en IPLAN\e[0m"
+
+ssh root@192.168.121.27 "docker stop "\""$empresa"\"".openvpn"
 
 echo -e "\e[33mReiniciar contenedor $empresa en MSOFFICE\e[0m"
 
 docker restart $empresa.openvpn
 
-echo -e "\e[33mTodo listo, fijate entre los usuarios coenctados en $empresa para ver si ya estan conectando[0m"
+echo -e "\e[33mTodo listo, fijate entre los usuarios coenctados en $empresa para ver si ya estan conectando\e[0m"
 
 }
 
