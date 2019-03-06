@@ -68,6 +68,8 @@ echo -e "\e[34mIngrese nombre de la empresa: \e[0m"
 read empresa
 echo -e "\e[34mIngrese el puerto asignado a $empresa: \e[0m"
 read port
+echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcp\udp)\e[0m"
+read proto
 
 if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE nombre='$empresa' COLLATE NOCASE);" | grep -q '1';
         then
@@ -81,7 +83,7 @@ if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FRO
                                         case $yn in
                                                 [Yy]* ) alta_empresa_con_dns;;
                                                 [Nn]* ) alta_empresa_sin_dns;;
-                                                        * ) echo -e "\e[31mPor favor responda y o n .\e[0m";;
+                                                    * ) echo -e "\e[31mPor favor responda y o n .\e[0m";;
                                         esac
                 fi
 fi
@@ -93,7 +95,7 @@ echo -e "\e[33mCargando config de servidor OpenVpn.\e[0m"
 docker run \
 -v $empresa.openvpn:/etc/openvpn \
 --rm kylemanna/openvpn ovpn_genconfig \
--u tcp://$empresa:$port \
+-u $proto://$empresa:$port \
 -s 172.30.0.0/16 \
 -d -D -N \
 echo ""
@@ -111,7 +113,7 @@ echo -e "\e[33mCreando contenedor de servicio OpenVpn\e[0m"
 docker run -d \
 --name $empresa.openvpn \
 -v $empresa.openvpn:/etc/openvpn \
--p $port:1194/tcp --cap-add=NET_ADMIN \
+-p $port:1194/$proto --cap-add=NET_ADMIN \
 --restart unless-stopped \
 kylemanna/openvpn
 
@@ -141,7 +143,7 @@ echo -e "\e[33mCargando config de servidor OpenVpn.\e[0m"
 docker run \
 -v $empresa.openvpn:/etc/openvpn \
 --rm kylemanna/openvpn ovpn_genconfig \
--u tcp://$empresa:$port \
+-u $proto://$empresa:$port \
 -s 172.30.0.0/16 \
 -d -D -N \
 -p "route $ippriv $mask"
@@ -162,7 +164,7 @@ echo -e "\e[33mCreando contenedor de servicio OpenVpn\e[0m"
 docker run -d \
 --name $empresa.openvpn \
 -v $empresa.openvpn:/etc/openvpn \
--p $port:1194/tcp --cap-add=NET_ADMIN \
+-p $port:1194/$proto --cap-add=NET_ADMIN \
 --restart unless-stopped \
 kylemanna/openvpn
 
