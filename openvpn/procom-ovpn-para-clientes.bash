@@ -41,7 +41,7 @@ done
 
 lista_empresas()
 {
-docker exec -it ovpn.db sqlite3 /database/ovpn.db '.header on' '.mode column' '.width 60, 6' 'SELECT nombre, puerto FROM empresa;'
+docker exec -it ovpn.db sqlite3 /database/ovpn.db '.header on' '.mode column' '.width 60, 6, 3' 'SELECT nombre, puerto, proto FROM empresa;'
 main_menu
 }
 
@@ -68,7 +68,7 @@ echo -e "\e[34mIngrese nombre de la empresa: \e[0m"
 read empresa
 echo -e "\e[34mIngrese el puerto asignado a $empresa: \e[0m"
 read port
-echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcp\udp)\e[0m"
+echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcp\udp) \e[0m"
 read proto
 
 if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE nombre='$empresa' COLLATE NOCASE);" | grep -q '1';
@@ -120,13 +120,16 @@ kylemanna/openvpn
 # We need to reload iptables rules after every restart and every new network added.
 docker exec -d $empresa.openvpn /bin/bash -c "sed -i '3ifi' /usr/local/bin/ovpn_run ; sed -i '3iiptables-restore /etc/openvpn/iptables.rules.v4' /usr/local/bin/ovpn_run ; sed -i '3iif [  -f /etc/openvpn/iptables.rules.v4 ]; then' /usr/local/bin/ovpn_run ; sed -i '3i# Load iptables rules' /usr/local/bin/ovpn_run" 
 
+# Remove everything relate to LZO compression
+docker exec -d $empresa.openvpn /bin/bash -c "sed -i '/lzo/d' /etc/openvpn/openvpn.conf"
+
 # Add iptables rules to this container, we accept only servers specified, everything else is dropped
 docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -A FORWARD -j DROP"
 
 # save those iptables changes
 docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4"
 
-docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port');"
+docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port', '$proto');"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
 }
@@ -171,13 +174,16 @@ kylemanna/openvpn
 # We need to reload iptables rules after every restart and every new network added.
 docker exec -d $empresa.openvpn /bin/bash -c "sed -i '3ifi' /usr/local/bin/ovpn_run ; sed -i '3iiptables-restore /etc/openvpn/iptables.rules.v4' /usr/local/bin/ovpn_run ; sed -i '3iif [  -f /etc/openvpn/iptables.rules.v4 ]; then' /usr/local/bin/ovpn_run ; sed -i '3i# Load iptables rules' /usr/local/bin/ovpn_run" 
 
+# Remove everything relate to LZO compression
+docker exec -d $empresa.openvpn /bin/bash -c "sed -i '/lzo/d' /etc/openvpn/openvpn.conf"
+
 # Add iptables rules to this container, we accept only servers specified, everything else is dropped
 docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -A FORWARD -j DROP"
 
 # save those iptables changes
 docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4"
 
-docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port');"
+docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO,PROTO) VALUES ('$empresa', '$port', '$proto');"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
 }
