@@ -41,7 +41,7 @@ done
 
 lista_empresas()
 {
-docker exec -it ovpn.db sqlite3 /database/ovpn.db '.header on' '.mode column' '.width 60, 6, 3' 'SELECT nombre, puerto, proto FROM empresa;'
+docker exec -it ovpn.db sqlite3 /database/ovpn.db '.header on' '.mode column' '.width 60, 6, 5' 'SELECT nombre, puerto, proto FROM empresa;'
 main_menu
 }
 
@@ -68,7 +68,7 @@ echo -e "\e[34mIngrese nombre de la empresa: \e[0m"
 read empresa
 echo -e "\e[34mIngrese el puerto asignado a $empresa: \e[0m"
 read port
-echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcp\udp) \e[0m"
+echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcpudp) \e[0m"
 read proto
 
 if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE nombre='$empresa' COLLATE NOCASE);" | grep -q '1';
@@ -129,9 +129,13 @@ docker exec -d $empresa.openvpn /bin/bash -c "iptables -i tun0 -A FORWARD -j DRO
 # save those iptables changes
 docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptables.rules.v4"
 
-docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO) VALUES ('$empresa', '$port', '$proto');"
+docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO,PROTO) VALUES ('$empresa', '$port', '$proto');"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
+
+# restart container to apply changes
+docker restart $empresa.openvpn
+
 }
 
 alta_empresa_con_dns()
@@ -186,6 +190,10 @@ docker exec -d $empresa.openvpn /bin/bash -c "iptables-save > /etc/openvpn/iptab
 docker exec -it ovpn.db sqlite3 /database/ovpn.db "INSERT INTO EMPRESA (NOMBRE,PUERTO,PROTO) VALUES ('$empresa', '$port', '$proto');"
 
 docker run -v ovpn.cifs:/perfiles --rm -it alpine sh -c "mkdir /perfiles/$empresa" && docker exec ovpn.cifs /bin/sh -c "rsync -a /mnt/openvpn/ /mnt/winshare"
+
+# restart container to apply changes
+docker restart $empresa.openvpn
+
 }
 
 alta_acceso()
