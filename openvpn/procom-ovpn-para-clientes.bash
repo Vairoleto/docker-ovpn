@@ -68,7 +68,7 @@ echo -e "\e[34mIngrese nombre de la empresa: \e[0m"
 read empresa
 echo -e "\e[34mIngrese el puerto asignado a $empresa: \e[0m"
 read port
-echo -e "\e[34mIngrese el protocolo que utilizara el contaier $empresa: (tcp|udp) \e[0m"
+echo -e "\e[34mIngrese el protocolo que utilizara el container $empresa: (tcp|udp) \e[0m"
 read proto
 
 if docker exec -it ovpn.db sqlite3 /database/ovpn.db "SELECT EXISTS(SELECT 1 FROM empresa WHERE nombre='$empresa' COLLATE NOCASE);" | grep -q '1';
